@@ -30,6 +30,28 @@ router.post('/change-password', authenticate, asyncHandler(async (req, res) => {
   res.json({ success: true, ...result });
 }));
 
+// PUT /api/auth/profile
+router.put(
+  '/profile',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const { name, email, phone } = req.body;
+
+    const result = await require('../../../config/database').query(
+      `UPDATE users 
+       SET name=$1, email=$2, phone=$3 
+       WHERE id=$4
+       RETURNING id, name, email, phone, role_id`,
+      [name, email, phone, req.user.id]
+    );
+
+    res.json({
+      success: true,
+      user: result.rows[0],
+    });
+  })
+);
+
 // POST /api/auth/logout
 router.post('/logout', authenticate, (req, res) => {
   res.json({ success: true, message: 'Logged out successfully' });
