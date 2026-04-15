@@ -130,13 +130,22 @@ router.patch('/:id/approve', asyncHandler(async (req, res) => {
     const items = await client.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
     const storeId = order.rows[0].store_id;
     for (const item of items.rows) {
-      // good_qty ↓, hold_qty ↑
-      const result = await client.query(
-        `UPDATE stock SET good_qty=good_qty-$1, hold_qty=hold_qty+$1
-         WHERE product_id=$2 AND store_id=$3 AND good_qty>=$1`,
+      // good_qty ↓, hold_qty ↑ — check availability first
+      const stockCheck = await client.query(
+        `SELECT COALESCE(good_qty, 0) as good_qty FROM stock WHERE product_id=$1 AND store_id=$2`,
+        [item.product_id, storeId]
+      );
+      const available = parseInt(stockCheck.rows[0]?.good_qty || 0);
+      if (available < item.quantity) {
+        throw { statusCode: 400, message: `Insufficient stock. Available: ${available}, Required: ${item.quantity}` };
+      }
+      await client.query(
+        `UPDATE stock
+         SET good_qty = GREATEST(0, good_qty - $1),
+             hold_qty = hold_qty + $1
+         WHERE product_id=$2 AND store_id=$3`,
         [item.quantity, item.product_id, storeId]
       );
-      if (result.rowCount === 0) throw { statusCode:400, message:`Insufficient stock for product ${item.product_id}` };
     }
     await client.query('COMMIT');
     res.json({ success: true, data: order.rows[0] });
@@ -166,7 +175,7 @@ router.patch('/:id/cancel', asyncHandler(async (req, res) => {
       const items = await client.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
       for (const item of items.rows) {
         await client.query(
-          'UPDATE stock SET good_qty=good_qty+$1, hold_qty=hold_qty-$1 WHERE product_id=$2 AND store_id=$3',
+          `UPDATE stock SET good_qty = good_qty + $1, hold_qty = GREATEST(0, hold_qty - $1) WHERE product_id=$2 AND store_id=$3`,
           [item.quantity, item.product_id, order.rows[0].store_id]
         );
       }

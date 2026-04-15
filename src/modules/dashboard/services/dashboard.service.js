@@ -8,7 +8,7 @@ const getAnalytics = async (days = 30) => {
         COALESCE(SUM(total_amount), 0) as total_sales,
         COUNT(*) as order_count
       FROM orders
-      WHERE status = 'delivered' AND created_at >= NOW() - INTERVAL '${days} days'
+      WHERE status IN ('delivered','shipped') AND created_at >= NOW() - INTERVAL '${days} days'
     `),
 
     // Orders grouped by status
@@ -89,7 +89,7 @@ const getAnalytics = async (days = 30) => {
         (SELECT COUNT(*) FROM purchase_requisitions WHERE status='pending') as pending_prs,
         (SELECT COUNT(*) FROM purchase_orders WHERE status='pending') as pending_pos,
         (SELECT COUNT(*) FROM inbounds WHERE status='in_progress') as active_inbounds,
-        (SELECT COUNT(*) FROM inbounds WHERE status='pending_stack') as pending_stacks,
+        (SELECT COUNT(*) FROM inbounds WHERE status IN ('pending_stack','in_progress')) as pending_stacks,        
         (SELECT COUNT(*) FROM orders WHERE status='packaging') as packaging_orders,
         (SELECT COUNT(*) FROM damage_logs WHERE status='pending') as pending_damage
     `)
